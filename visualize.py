@@ -4,6 +4,57 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from .pst import PSTResult
 
+_PRETTY_GRAPH_ATTRS = {
+    "rankdir": "LR",
+    "bgcolor": "transparent",
+    "pad": "0.2",
+    "nodesep": "0.35",
+    "ranksep": "0.5",
+    "splines": "true",
+    "overlap": "false",
+    "fontname": "Helvetica",
+    "fontsize": "12",
+}
+
+_PRETTY_NODE_ATTRS = {
+    "shape": "oval",
+    "style": "filled",
+    "color": "#455A64",
+    "fillcolor": "white",
+    "penwidth": "1.1",
+    "fontname": "Helvetica",
+    "fontsize": "11",
+    "margin": "0.08,0.05",
+}
+
+_PRETTY_EDGE_ATTRS = {
+    "color": "#546E7A",
+    "fontcolor": "#455A64",
+    "penwidth": "1.1",
+    "arrowsize": "0.7",
+    "fontname": "Helvetica",
+    "fontsize": "9",
+}
+
+_REGION_PALETTE = [
+    ("#E3F2FD", "#64B5F6"),
+    ("#E8F5E9", "#81C784"),
+    ("#FFF8E1", "#FFB74D"),
+    ("#FBE9E7", "#FF8A65"),
+    ("#E0F7FA", "#4DD0E1"),
+    ("#ECEFF1", "#90A4AE"),
+]
+_REGION_LABEL_ALIGN = "LEFT"
+
+
+def _dot_attrs(attrs: Dict[str, str]) -> str:
+    return ", ".join(f'{key}="{value}"' for key, value in attrs.items())
+
+
+def _region_colors(depth: int) -> Tuple[str, str]:
+    fill, border = _REGION_PALETTE[depth % len(_REGION_PALETTE)]
+    return fill, border
+
 
 def _dot_escape_id(value: object) -> str:
     text = str(value)
@@ -15,9 +66,44 @@ def _dot_escape_label(value: object) -> str:
     return text.replace('"', '\\"')
 
 
+def _html_escape(value: object) -> str:
+    text = str(value)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _display_node_label(node: object, result: PSTResult) -> str:
+    if node == result.super_entry:
+        return "Super entry"
+    if node == result.super_exit:
+        return "Super exit"
+    return str(node)
+
+
+def _edge_pair_label_html(src: object, dst: object, result: PSTResult) -> str:
+    src_label = _html_escape(_display_node_label(src, result))
+    dst_label = _html_escape(_display_node_label(dst, result))
+    return f"{src_label} &#8594; {dst_label}"
+
+
+def _region_label_table(lines: List[str], *, align: str = _REGION_LABEL_ALIGN) -> str:
+    align = align.upper()
+    rows = "".join(
+        f'<TR><TD ALIGN="{align}">{line}</TD></TR>' for line in lines
+    )
+    return (
+        f'<TABLE BORDER="0" CELLBORDER="0" CELLPADDING="0" ALIGN="{align}">'
+        f"{rows}</TABLE>"
+    )
+
+
 def _edge_label(edge_id: int, class_id: int, kind: str) -> str:
     label = f"{edge_id}:{class_id}"
-    if kind != "orig":
+    if kind not in ("orig", "super_entry", "super_exit"):
         label = f"{label}\\n{kind}"
     return label
 
@@ -35,6 +121,9 @@ def cfg_to_dot(result: PSTResult, *, include_back: bool = False) -> str:
         attrs: list[str] = []
         if node == result.super_entry or node == result.super_exit:
             attrs.append("shape=doublecircle")
+        display_label = _display_node_label(node, result)
+        if display_label != str(node):
+            attrs.append(f'label="{_dot_escape_label(display_label)}"')
         label = _dot_escape_id(node)
         if attrs:
             lines.append(f'  "{label}" [{", ".join(attrs)}];')
@@ -51,10 +140,13 @@ def cfg_to_dot(result: PSTResult, *, include_back: bool = False) -> str:
             attrs.append("style=dashed")
         label = _edge_label(edge.id, edge.class_id, edge.kind)
         attrs.append(f'label="{_dot_escape_label(label)}"')
-        attrs_text = ", ".join(attrs)
         src = _dot_escape_id(edge.src)
         dst = _dot_escape_id(edge.dst)
-        lines.append(f'  "{src}" -> "{dst}" [{attrs_text}];')
+        if attrs:
+            attrs_text = ", ".join(attrs)
+            lines.append(f'  "{src}" -> "{dst}" [{attrs_text}];')
+        else:
+            lines.append(f'  "{src}" -> "{dst}";')
 
     lines.append("}")
     return "\n".join(lines) + "\n"
@@ -66,14 +158,17 @@ def pst_to_dot(result: PSTResult) -> str:
     for region_id in sorted(result.regions):
         region = result.regions[region_id]
         if region_id == result.root:
-            label = "root"
+            label = _region_label_table(["root"])
+            lines.append(f'  "R{region_id}" [label=<{label}>];')
         else:
             entry = result.edges[region.entry_edge]
             exit = result.edges[region.exit_edge]
-            entry_label = f"{entry.src}->{entry.dst}"
-            exit_label = f"{exit.src}->{exit.dst}"
-            label = f"R{region_id}\\n{entry_label}\\n{exit_label}"
-        lines.append(f'  "R{region_id}" [label="{_dot_escape_label(label)}"];')
+            entry_label = _edge_pair_label_html(entry.src, entry.dst, result)
+            exit_label = _edge_pair_label_html(exit.src, exit.dst, result)
+            label = _region_label_table(
+                [f"<B>R{region_id}</B>", entry_label, exit_label]
+            )
+            lines.append(f'  "R{region_id}" [label=<{label}>];')
 
     for region_id in sorted(result.regions):
         region = result.regions[region_id]
@@ -178,6 +273,7 @@ def cfg_with_regions_to_dot(
     include_super: bool = False,
     include_root: bool = False,
     include_back: bool = False,
+    show_edge_labels: bool = True,
 ) -> str:
     region_nodes = _region_node_sets(result, include_super=include_super)
 
@@ -208,6 +304,12 @@ def cfg_with_regions_to_dot(
         attrs: list[str] = []
         if node == result.super_entry or node == result.super_exit:
             attrs.append("shape=doublecircle")
+            attrs.append('fillcolor="#ECEFF1"')
+            attrs.append('color="#607D8B"')
+            attrs.append('penwidth="1.4"')
+        display_label = _display_node_label(node, result)
+        if display_label != str(node):
+            attrs.append(f'label="{_dot_escape_label(display_label)}"')
         label = _dot_escape_id(node)
         if attrs:
             lines.append(f'{indent}"{label}" [{", ".join(attrs)}];')
@@ -220,13 +322,27 @@ def cfg_with_regions_to_dot(
             lines.append(f"{indent}subgraph cluster_R{region_id} {{")
             next_indent = f"{indent}  "
             if region_id == result.root:
-                label = "root"
+                label = _region_label_table(["root"])
+                lines.append(f'{next_indent}label=<{label}>;')
             else:
                 entry = result.edges[region.entry_edge]
                 exit = result.edges[region.exit_edge]
-                label = f"R{region_id}\\n{entry.src}->{entry.dst}\\n{exit.src}->{exit.dst}"
-            lines.append(f'{next_indent}label="{_dot_escape_label(label)}";')
-            lines.append(f"{next_indent}style=rounded;")
+                entry_label = _edge_pair_label_html(entry.src, entry.dst, result)
+                exit_label = _edge_pair_label_html(exit.src, exit.dst, result)
+                label = _region_label_table(
+                    [f"<B>R{region_id}</B>", entry_label, exit_label]
+                )
+                lines.append(f'{next_indent}label=<{label}>;')
+            lines.append(f'{next_indent}labelloc="t";')
+            lines.append(f'{next_indent}labeljust="l";')
+            fill, border = _region_colors(depth.get(region_id, 0))
+            lines.append(f'{next_indent}style="rounded,filled";')
+            lines.append(f'{next_indent}color="{border}";')
+            lines.append(f'{next_indent}fillcolor="{fill}";')
+            lines.append(f'{next_indent}fontcolor="#37474F";')
+            lines.append(f'{next_indent}fontsize="11";')
+            lines.append(f'{next_indent}fontname="Helvetica";')
+            lines.append(f'{next_indent}penwidth="1.2";')
         else:
             next_indent = indent
 
@@ -239,7 +355,12 @@ def cfg_with_regions_to_dot(
         if region_id != result.root or include_root:
             lines.append(f"{indent}}}")
 
-    lines = ["digraph CFG {", "  rankdir=LR;"]
+    lines = [
+        "digraph CFG {",
+        f"  graph [{_dot_attrs(_PRETTY_GRAPH_ATTRS)}];",
+        f"  node [{_dot_attrs(_PRETTY_NODE_ATTRS)}];",
+        f"  edge [{_dot_attrs(_PRETTY_EDGE_ATTRS)}];",
+    ]
 
     if include_root:
         emit_region(lines, result.root, "  ")
@@ -254,7 +375,9 @@ def cfg_with_regions_to_dot(
         for node in (edge.src, edge.dst):
             if node in emitted_nodes:
                 continue
-            if not include_super and node in (result.super_entry, result.super_exit):
+            if node in (result.super_entry, result.super_exit):
+                emit_node(lines, node, "  ")
+                emitted_nodes.add(node)
                 continue
             emit_node(lines, node, "  ")
             emitted_nodes.add(node)
@@ -264,15 +387,24 @@ def cfg_with_regions_to_dot(
             continue
         attrs: list[str] = []
         if edge.kind == "back":
-            attrs.append("style=dotted")
+            attrs.append('style="dotted"')
+            attrs.append('color="#90A4AE"')
+            attrs.append('fontcolor="#90A4AE"')
+            attrs.append("constraint=false")
         elif edge.kind in ("super_entry", "super_exit"):
-            attrs.append("style=dashed")
-        label = _edge_label(edge.id, edge.class_id, edge.kind)
-        attrs.append(f'label="{_dot_escape_label(label)}"')
-        attrs_text = ", ".join(attrs)
+            attrs.append('style="dashed"')
+            attrs.append('color="#78909C"')
+            attrs.append('fontcolor="#78909C"')
+        if show_edge_labels:
+            label = _edge_label(edge.id, edge.class_id, edge.kind)
+            attrs.append(f'label="{_dot_escape_label(label)}"')
         src = _dot_escape_id(edge.src)
         dst = _dot_escape_id(edge.dst)
-        lines.append(f'  "{src}" -> "{dst}" [{attrs_text}];')
+        if attrs:
+            attrs_text = ", ".join(attrs)
+            lines.append(f'  "{src}" -> "{dst}" [{attrs_text}];')
+        else:
+            lines.append(f'  "{src}" -> "{dst}";')
 
     lines.append("}")
     return "\n".join(lines) + "\n"

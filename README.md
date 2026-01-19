@@ -1,4 +1,4 @@
-# Program Structure Tree (PST)
+# SESE Regions
 
 Python implementation of the Johnson-Pearson-Pingali algorithm for
 computing canonical single-entry/single-exit (SESE) regions and building
@@ -6,7 +6,7 @@ the Program Structure Tree (PST) for directed graphs. The implementation
 adds a super-entry and super-exit when the input has multiple entries or
 exits, and provides Graphviz DOT exporters for visualization.
 
-![CFG regions](cfg_regions.png)
+![CFG regions](cfg_regions.svg)
 
 ## What is included
 
@@ -37,7 +37,7 @@ print("wrote cfg_regions.dot")
 PY
 ```
 
-Render the DOT file if you have Graphviz installed:
+Render the DOT file:
 
 ```bash
 dot -Tpng cfg_regions.dot -o cfg_regions.png
