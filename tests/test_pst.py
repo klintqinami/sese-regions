@@ -246,6 +246,35 @@ def _region_map(result):
     return mapping
 
 
+def _paper_figure_adj():
+    # Figure 1(a) adjacency list from the PST paper.
+    edges = [
+        ("start", "n1"),
+        ("n1", "n2"),
+        ("n1", "n3"),
+        ("n2", "n4"),
+        ("n3", "n5"),
+        ("n4", "n6"),
+        ("n5", "n7"),
+        ("n5", "n8"),
+        ("n6", "n9"),
+        ("n6", "n10"),
+        ("n7", "n11"),
+        ("n8", "n11"),
+        ("n9", "n12"),
+        ("n10", "n12"),
+        ("n11", "n13"),
+        ("n12", "n14"),
+        ("n13", "n8"),
+        ("n13", "n15"),
+        ("n14", "n2"),
+        ("n14", "n16"),
+        ("n15", "n16"),
+        ("n16", "end"),
+    ]
+    return _make_adj(edges)
+
+
 class PSTTests(unittest.TestCase):
     def _assert_matches_naive(self, edges):
         adj = _make_adj(edges)
@@ -297,6 +326,12 @@ class PSTTests(unittest.TestCase):
         r5 = mapping[(("A", "C", "orig"), ("C", "D", "orig"))]
         self.assertEqual(result.regions[r2].parent, r3)
         self.assertEqual(result.regions[r5].parent, r3)
+
+    def test_paper_figure_matches_naive(self):
+        result = compute_pst(_paper_figure_adj())
+        actual = _pst_pairs(result)
+        expected = _canonical_pairs(_paper_figure_adj())
+        self.assertEqual(expected, actual)
 
 
 if __name__ == "__main__":

@@ -300,6 +300,18 @@ def cfg_with_regions_to_dot(
     for node, region_id in assigned.items():
         assigned_nodes[region_id].append(node)
 
+    def edge_visible(edge) -> bool:
+        if edge.kind == "back" and not include_back:
+            return False
+        if not include_super:
+            if edge.kind in ("super_entry", "super_exit", "back"):
+                return False
+            if edge.src in (result.super_entry, result.super_exit):
+                return False
+            if edge.dst in (result.super_entry, result.super_exit):
+                return False
+        return True
+
     def emit_node(lines: List[str], node: object, indent: str) -> None:
         attrs: list[str] = []
         if node == result.super_entry or node == result.super_exit:
@@ -370,10 +382,12 @@ def cfg_with_regions_to_dot(
 
     emitted_nodes = set(assigned.keys())
     for edge in result.edges.values():
-        if edge.kind == "back" and not include_back:
+        if not edge_visible(edge):
             continue
         for node in (edge.src, edge.dst):
             if node in emitted_nodes:
+                continue
+            if not include_super and node in (result.super_entry, result.super_exit):
                 continue
             if node in (result.super_entry, result.super_exit):
                 emit_node(lines, node, "  ")
@@ -383,7 +397,7 @@ def cfg_with_regions_to_dot(
             emitted_nodes.add(node)
 
     for edge in result.edges.values():
-        if edge.kind == "back" and not include_back:
+        if not edge_visible(edge):
             continue
         attrs: list[str] = []
         if edge.kind == "back":

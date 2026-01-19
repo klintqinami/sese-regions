@@ -6,7 +6,37 @@ the Program Structure Tree (PST) for directed graphs. The implementation
 adds a super-entry and super-exit when the input has multiple entries or
 exits, and provides Graphviz DOT exporters for visualization.
 
-![CFG regions](cfg_regions.svg)
+<div align="center">
+  <img src="images/cfg_regions.svg" width="520" alt="Region output for the diamond graph example"><br>
+  Region output for the diamond graph example
+</div>
+
+## Worked example with loops
+
+This worked example mirrors the more complex control-flow graph from Figure 1a
+in [1], including back edges and nested structure. The generated CFG-with-regions
+output uses the same adjacency list to highlight how the PST groups regions.
+
+<div align="center">
+  <table align="center">
+    <tr>
+      <td align="center">
+        <img src="images/fig1_hand_diagram.svg" width="240" alt="Hand diagram of Figure 1a"><br>
+        Hand-transcribed Figure 1a from [1] graph with node labels
+      </td>
+      <td align="center">
+        <img src="images/fig1a.png" width="240" alt="Figure 1a from the paper"><br>
+        Figure 1a from [1]
+      </td>
+    </tr>
+    <tr>
+      <td align="center" colspan="2">
+        <img src="images/cfg_regions_paper.svg" width="520" alt="Computed regions for Figure 1a"><br>
+        Generated CFG regions for Figure 1a adjacency list
+      </td>
+    </tr>
+  </table>
+</div>
 
 ## What is included
 
@@ -43,8 +73,18 @@ Render the DOT file:
 dot -Tpng cfg_regions.dot -o cfg_regions.png
 ```
 
+Generate the bundled visualizations (writes SVGs to `images/`):
+
+```bash
+python3 generate_viz.py
+```
+
 Run tests:
 
 ```bash
 python3 -m unittest discover -s sese/tests
 ```
+
+## References
+
+[1] Johnson, Richard, David Pearson, and Keshav Pingali. "The program structure tree: Computing control regions in linear time." Proceedings of the ACM SIGPLAN 1994 conference on Programming language design and implementation. 1994.
